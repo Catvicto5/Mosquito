@@ -1,16 +1,155 @@
-# Node rules:
-## Grunt intermediate storage (http://gruntjs.com/creating-plugins#storing-task-files)
-.grunt
+import discord
+from discord.ext import commands
 
-## Dependency directory
-## Commenting this out is preferred by some people, see
-## https://docs.npmjs.com/misc/faq#should-i-check-my-node_modules-folder-into-git
-node_modules
+# Define your bot's token
+TOKEN = "Your bot token"
 
-# Book build output
-_book
+# Define the specific user's ID who can use the command
+allowed_user_id = 1130876030043828257  # Replace with the actual ID
 
-# eBook build output
-*.epub
-*.mobi
-*.pdf
+# Define the channel ID where the update message should be sent
+channel_id = 1150179825957482618  # Replace with the correct channel ID
+
+# Define your bot's intents
+intents = discord.Intents.default()
+intents.typing = False
+intents.presences = False
+
+# Enable the message content intent
+intents.message_content = True
+
+# Initialize the bot with the intents
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# Remove the default help command to define a custom one
+bot.remove_command("help")
+
+# Define an update message
+update_message = "Bot has been updated. New features added!"
+
+# Create a dictionary to hold command categories and descriptions
+command_categories = {
+    "General": "General commands for everyone.",
+    "Moderation": "Commands for moderation purposes.",
+    "Other": "Other miscellaneous commands.",
+}
+
+@bot.event
+async def on_ready():
+    print(f'Logged in as {bot.user.name} ({bot.user.id})')
+    print('Bot is ready!')
+
+    # Set a custom status for the bot
+    custom_status = discord.Activity(name="Mosquito", type=discord.ActivityType.watching)
+    await bot.change_presence(activity=custom_status)
+
+@bot.command()
+async def hello(ctx):
+    """Say hello to the user."""
+    await ctx.send(f"Hello, {ctx.author.mention}!")
+
+@bot.command()
+async def report_issue(ctx, *, issue_description):
+    """Report an issue to the bot owner."""
+    # You can replace this with your desired logic for handling issue reports
+    # For now, just send a confirmation message to the user
+    await ctx.send(f"Thank you for reporting the issue: {issue_description}. We will look into it!")
+
+# Command to manually announce an update (restricted to a specific user)
+@bot.command()
+async def announce_update(ctx):
+    """Announce a bot update (restricted to a specific user)."""
+    if ctx.author.id == allowed_user_id:
+        await send_update_message_to_channel(update_message)
+    else:
+        await ctx.send("You are not authorized to use this command.")
+
+# Function to send update message to a specific channel
+async def send_update_message_to_channel(message):
+    channel = bot.get_channel(channel_id)
+    
+    if channel:
+        await channel.send(message)
+    else:
+        await ctx.send("Failed to send the update message. The specified channel was not found.")
+
+# Command to ban a user (even if not in the server) (restricted to a specific user)
+@bot.command()
+async def paban(ctx, user_id: int):
+    """Ban a user from all servers the bot is in (restricted to specific users)."""
+    # Check if the user invoking the command is one of the allowed users
+    if ctx.author.id in (allowed_user_id):
+        for guild in bot.guilds:
+            try:
+                await guild.ban(discord.Object(id=user_id))
+                await ctx.send(f"Banned user with ID {user_id} from {guild.name}.")
+            except Exception as e:
+                await ctx.send(f"Failed to ban user with ID {user_id} from {guild.name}: {str(e)}")
+    else:
+        await ctx.send("You are not authorized to use this command.")
+
+# Command to check how many servers the bot is in
+@bot.command()
+async def server_count(ctx):
+    """Check how many servers the bot is in."""
+    server_count = len(bot.guilds)
+    await ctx.send(f"The bot is in {server_count} servers.")
+
+# Moderation commands
+@bot.command()
+async def kick(ctx, member: discord.Member, *, reason="No reason provided"):
+    """Kick a member from the server (moderation command)."""
+    if ctx.author.guild_permissions.kick_members:
+        await member.kick(reason=reason)
+        await ctx.send(f"{member.mention} has been kicked for: {reason}")
+    else:
+        await ctx.send("You don't have permission to use this command.")
+
+@bot.command()
+async def ban(ctx, member: discord.Member, *, reason="No reason provided"):
+    """Ban a member from the server (moderation command)."""
+    if ctx.author.guild_permissions.ban_members:
+        await member.ban(reason=reason)
+        await ctx.send(f"{member.mention} has been banned for: {reason}")
+    else:
+        await ctx.send("You don't have permission to use this command.")
+
+# Command to show all available commands
+@bot.command()
+async def commands_list(ctx):
+    """Show all available commands."""
+    command_list = [f"!{cmd.name}" for cmd in bot.commands]
+    await ctx.send("Available commands:\n" + "\n".join(command_list))
+
+# Custom help command
+@bot.command()
+async def help(ctx, category=None):
+    """Show available commands and their categories."""
+    if category is None:
+        # Display all categories and their descriptions
+        embed = discord.Embed(title="Command Categories", color=0x7289DA)
+
+        for cat, desc in command_categories.items():
+            embed.add_field(name=cat, value=desc, inline=False)
+
+        await ctx.send(embed=embed)
+    else:
+        # Display commands in the specified category
+        if category in command_categories:
+            category_embed = discord.Embed(
+                title=f"{category} Commands",
+                description=command_categories[category],
+                color=0x7289DA,
+            )
+            for cmd in bot.commands:
+                if cmd.cog_name == category:
+                    category_embed.add_field(
+                        name=f"!{cmd.name}", value=cmd.help or "No description provided", inline=False
+                    )
+
+            await ctx.send(embed=category_embed)
+        else:
+            await ctx.send("Invalid category.")
+
+# Run the bot
+bot.run(TOKEN)
